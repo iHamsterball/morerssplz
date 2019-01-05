@@ -59,7 +59,7 @@ class ZhihuZhuanlanHandler(BaseHandler):
 
         rss_info = {
             'title': '%s - 知乎专栏' % info.get('title', ''),
-            'description': info.get('description', ''),
+            'description': cdata(info.get('description', '')),
         }
 
         rss = base.data2rss(
@@ -101,6 +101,10 @@ def process_content(text):
     return text
 
 
+def cdata(text):
+    return '<![CDATA[{}]]>'.format(text)
+
+
 def post2rss(baseurl, post, *, digest=False, pic=None):
     url = urljoin(baseurl, post['url'])
     if digest:
@@ -122,7 +126,8 @@ def post2rss(baseurl, post, *, digest=False, pic=None):
     item = PyRSS2Gen.RSSItem(
         title=post['title'].replace('\x08', ''),
         link=url,
-        description='<![CDATA[{}]]>'.format(content),
+        guid=PyRSS2Gen.Guid(url),
+        description=cdata(content),
         pubDate=datetime.datetime.fromtimestamp(post['created']),
         author=post['author']['name'],
     )
