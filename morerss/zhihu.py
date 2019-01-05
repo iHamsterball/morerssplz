@@ -79,7 +79,7 @@ class ZhihuZhuanlanHandler(BaseHandler):
         data = []
         for item in posts['data']:
             res = await base.fetch_zhihu(item['url'])
-            # await asyncio.sleep(randint(1, 5))
+            await asyncio.sleep(randint(1, 5))
             soup = BeautifulSoup(res.body.decode('utf-8'), features='lxml')
             item['content'] = soup.find(
                 'div', class_='RichText ztext Post-RichText').text
@@ -122,7 +122,7 @@ def post2rss(baseurl, post, *, digest=False, pic=None):
     item = PyRSS2Gen.RSSItem(
         title=post['title'].replace('\x08', ''),
         link=url,
-        description=content,
+        description='<![CDATA[{}]]>'.format(content),
         pubDate=datetime.datetime.fromtimestamp(post['created']),
         author=post['author']['name'],
     )
