@@ -1,9 +1,11 @@
 from urllib.parse import urljoin
+import asyncio
 import datetime
 import json
 import re
 import itertools
 from functools import partial
+from random import randint
 
 import PyRSS2Gen
 from lxml.html import fromstring, tostring
@@ -25,6 +27,23 @@ def abs_img(m):
 
 class ZhihuZhuanlanHandler(BaseHandler):
     async def get(self, name):
+        self.key = 'rss:zhihuzhuanlan:{}'.format(name)
+        loop = asyncio.get_event_loop()
+        loop.create_task(self._update(name))
+        if self.redis.exists(self.key):
+            xml = self.redis.get(self.key)
+        else:
+            rss = PyRSS2Gen.RSS2(
+                title='',
+                link='',
+                lastBuildDate=datetime.datetime.now(),
+                generator='morerssplz %s' % (base.__version__),
+                description='',
+            )
+            xml = rss.to_xml(encoding='utf-8')
+        self.finish(xml)
+
+    async def _update(self, name):
         pic = self.get_argument('pic', None)
         digest = self.get_argument('digest', False) == 'true'
 
@@ -46,7 +65,7 @@ class ZhihuZhuanlanHandler(BaseHandler):
             partial(post2rss, url, digest=digest, pic=pic),
         )
         xml = rss.to_xml(encoding='utf-8')
-        self.finish(xml)
+        self.redis.set(self.key, xml)
 
     async def _get_url(self, url):
         res = await base.fetch_zhihu(url)
@@ -57,6 +76,7 @@ class ZhihuZhuanlanHandler(BaseHandler):
         data = []
         for item in posts['data']:
             res = await base.fetch_zhihu(item['url'])
+            await asyncio.sleep(randint(1, 5))
             soup = BeautifulSoup(res.body.decode('utf-8'), features='lxml')
             item['content'] = soup.find(
                 'div', class_='RichText ztext Post-RichText').text
