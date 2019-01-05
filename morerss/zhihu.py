@@ -3,6 +3,7 @@ import asyncio
 import datetime
 import json
 import re
+import html.parser
 import itertools
 from functools import partial
 from random import randint
@@ -31,7 +32,9 @@ class ZhihuZhuanlanHandler(BaseHandler):
         loop = asyncio.get_event_loop()
         loop.create_task(self._update(name))
         if self.redis.exists(self.key):
+            parser = html.parser.HTMLParser()
             xml = self.redis.get(self.key)
+            xml = parser.unescape(xml)
         else:
             rss = PyRSS2Gen.RSS2(
                 title='',
@@ -76,7 +79,7 @@ class ZhihuZhuanlanHandler(BaseHandler):
         data = []
         for item in posts['data']:
             res = await base.fetch_zhihu(item['url'])
-            await asyncio.sleep(randint(1, 5))
+            # await asyncio.sleep(randint(1, 5))
             soup = BeautifulSoup(res.body.decode('utf-8'), features='lxml')
             item['content'] = soup.find(
                 'div', class_='RichText ztext Post-RichText').text
