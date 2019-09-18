@@ -55,7 +55,7 @@ class ZhihuZhuanlanHandler(BaseHandler):
         baseurl = 'https://zhuanlan.zhihu.com/' + name
         url = 'https://zhuanlan.zhihu.com/api/columns/' + name
         info = await self._get_url(url)
-        url = 'https://zhuanlan.zhihu.com/api/columns/%s/posts?limit=20' % name
+        url = 'https://zhuanlan.zhihu.com/api/columns/%s/articles?limit=60' % name
         posts = await self._get_url(url)
         posts = await self._process_posts(posts)
 
@@ -83,8 +83,8 @@ class ZhihuZhuanlanHandler(BaseHandler):
             res = await base.fetch_zhihu(item['url'])
             await asyncio.sleep(randint(1, 5))
             soup = BeautifulSoup(res.body.decode('utf-8'), features='lxml')
-            item['content'] = soup.find(
-                'div', class_='RichText ztext Post-RichText').text
+            item['content'] = str(
+                soup.find('div', class_='RichText ztext Post-RichText'))
             data.append(item)
         return data
 
@@ -100,6 +100,9 @@ def process_content(text):
     text = text.replace('<img ', '<img referrerpolicy="no-referrer" ')
     text = text.replace('<code ', '<pre><code ')
     text = text.replace('</code>', '</code></pre>')
+    text = text.replace('<div>', '')
+    text = text.replace('</div>', '')
+    text = text.replace('<div class="RichText ztext Post-RichText">', '')
     return text
 
 
@@ -124,6 +127,8 @@ def post2rss(baseurl, post, *, digest=False, pic=None):
         if pic:
             base.proxify_pic(doc, re_zhihu_img, pic)
         content = tostring(doc, encoding=str)
+        content = content.replace('<div>', '')
+        content = content.replace('</div>', '')
 
     item = PyRSS2Gen.RSSItem(
         title=post['title'].replace('\x08', ''),
