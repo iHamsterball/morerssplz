@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 import traceback
 import http.client
 from urllib.parse import quote
@@ -9,6 +11,7 @@ import redis
 
 from tornado import web, httpclient
 from tornado.log import gen_log
+from tornado.options import options
 from tornado.httpclient import HTTPRequest
 import PyRSS2Gen
 
@@ -124,8 +127,6 @@ try:
     from . import proxy
 except ImportError:
     proxy = None
-
-from tornado.options import options
 
 
 class ZhihuManager:

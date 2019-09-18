@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 import json
 import logging
 
@@ -24,34 +26,35 @@ body {{ max-width: 700px; margin: auto; }}
 
 logger = logging.getLogger(__name__)
 
+
 class StaticZhihuHandler(BaseHandler):
-  async def get(self, id):
-    pic = self.get_argument('pic', None)
-    page = await self._get_url(f'https://zhuanlan.zhihu.com/p/{id}')
-    doc = fromstring(page)
-    try:
-      static = doc.xpath('//script[@id="js-initialData"]')[0]
-    except IndexError:
-      logger.error('page source: %s', page)
-      raise
-    content = json.loads(static.text)['initialState']
+    async def get(self, id):
+        pic = self.get_argument('pic', None)
+        page = await self._get_url(f'https://zhuanlan.zhihu.com/p/{id}')
+        doc = fromstring(page)
+        try:
+            static = doc.xpath('//script[@id="js-initialData"]')[0]
+        except IndexError:
+            logger.error('page source: %s', page)
+            raise
+        content = json.loads(static.text)['initialState']
 
-    article = content['entities']['articles'][id]
-    # used by vars()
-    title = article['title']
-    author = article['author']['name']
-    body = article['content']
+        article = content['entities']['articles'][id]
+        # used by vars()
+        title = article['title']
+        author = article['author']['name']
+        body = article['content']
 
-    doc = fromstring(body)
-    body = tidy_content(doc)
+        doc = fromstring(body)
+        body = tidy_content(doc)
 
-    if pic:
-      base.proxify_pic(doc, re_zhihu_img, pic)
+        if pic:
+            base.proxify_pic(doc, re_zhihu_img, pic)
 
-    body = tostring(doc, encoding=str)
-    self.set_header('Content-Type', 'text/html; charset=utf-8')
-    self.finish(page_template.format_map(vars()))
+        body = tostring(doc, encoding=str)
+        self.set_header('Content-Type', 'text/html; charset=utf-8')
+        self.finish(page_template.format_map(vars()))
 
-  async def _get_url(self, url):
-    res = await fetch_zhihu(url)
-    return res.body.decode('utf-8')
+    async def _get_url(self, url):
+        res = await fetch_zhihu(url)
+        return res.body.decode('utf-8')

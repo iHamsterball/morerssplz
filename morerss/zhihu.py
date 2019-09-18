@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 from urllib.parse import urljoin
 import asyncio
 import datetime

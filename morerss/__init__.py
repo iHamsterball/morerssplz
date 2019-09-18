@@ -1,9 +1,11 @@
+#!/usr/bin/python
+# -*- coding: utf-8 -*-
 from tornado.httpclient import AsyncHTTPClient
 try:
-  import pycurl
-  AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
+    import pycurl
+    AsyncHTTPClient.configure("tornado.curl_httpclient.CurlAsyncHTTPClient")
 except ImportError:
-  pycurl = None
+    pycurl = None
 
 from .zhihu import ZhihuZhuanlanHandler
 from .zhihu_stream import ZhihuStream
