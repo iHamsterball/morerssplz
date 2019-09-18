@@ -130,7 +130,7 @@ def post2rss(baseurl, post, *, digest=False, pic=None):
         link=url,
         guid=PyRSS2Gen.Guid(url),
         description=cdata(content),
-        pubDate=datetime.datetime.fromtimestamp(post['created']),
+        pubDate=datetime.datetime.utcfromtimestamp(post['updated']),
         author=post['author']['name'],
     )
     return item
