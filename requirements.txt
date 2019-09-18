@@ -1,0 +1,7 @@
+pycurl==7.43.1
+lxml==4.2.6
+tornado==5.1.1
+requests==2.22.0
+PyRSS2Gen==1.1
+beautifulsoup4==4.8.0
+redis==3.3.8
