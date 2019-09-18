@@ -31,38 +31,51 @@ def abs_img(m):
 class ZhihuZhuanlanHandler(BaseHandler):
     async def get(self, name):
         self.key = 'rss:zhihuzhuanlan:{}'.format(name)
-        loop = asyncio.get_event_loop()
-        loop.create_task(self._update(name))
-        if self.redis.exists(self.key):
-            parser = html.parser.HTMLParser()
-            xml = self.redis.get(self.key)
-            xml = parser.unescape(xml)
-        else:
-            rss = PyRSS2Gen.RSS2(
-                title='',
-                link='',
-                lastBuildDate=datetime.datetime.now(),
-                generator='morerssplz %s' % (base.__version__),
-                description='',
-            )
-            xml = rss.to_xml(encoding='utf-8')
+        xml = await self._update(name)
+        # if self.redis.exists(self.key):
+        #     parser = html.parser.HTMLParser()
+        #     xml = self.redis.get(self.key)
+        #     xml = parser.unescape(xml)
+        # else:
+        #     rss = PyRSS2Gen.RSS2(
+        #         title='',
+        #         link='',
+        #         lastBuildDate=datetime.datetime.now(),
+        #         generator='morerssplz %s' % (base.__version__),
+        #         description='',
+        #     )
+        #     xml = rss.to_xml(encoding='utf-8')
         self.finish(xml)
 
     async def _update(self, name):
         pic = self.get_argument('pic', None)
         digest = self.get_argument('digest', False) == 'true'
 
-        baseurl = 'https://zhuanlan.zhihu.com/' + name
-        url = 'https://zhuanlan.zhihu.com/api/columns/' + name
-        info = await self._get_url(url)
-        url = 'https://zhuanlan.zhihu.com/api/columns/%s/articles?limit=60' % name
-        posts = await self._get_url(url)
-        posts = await self._process_posts(posts)
-
+        info = await self._get_info(name)
         rss_info = {
             'title': '%s - 知乎专栏' % info.get('title', ''),
             'description': cdata(info.get('description', '')),
         }
+
+        baseurl = 'https://zhuanlan.zhihu.com/' + name
+        url = 'https://zhuanlan.zhihu.com/api/columns/%s/articles?limit=100' % name
+
+        articles = dict()
+        library = dict()
+        async for articles in self._get_articles(url):
+            for article in articles:
+                articles[article.get('id')] = None
+                author = article.get('author').get('url_token')
+                if author not in library:
+                    async for library in self._get_library(author):
+                        for item in library:
+                            library[item.get('id')] = item
+
+        print(library)
+        for id in articles:
+            articles[id] = library[id]
+
+        posts = articles.values()
 
         rss = base.data2rss(
             baseurl,
@@ -70,12 +83,32 @@ class ZhihuZhuanlanHandler(BaseHandler):
             partial(post2rss, url, digest=digest, pic=pic),
         )
         xml = rss.to_xml(encoding='utf-8')
-        self.redis.set(self.key, xml)
+        # self.redis.set(self.key, xml)
+        return xml
 
     async def _get_url(self, url):
         res = await base.fetch_zhihu(url)
         info = json.loads(res.body.decode('utf-8'))
         return info
+
+    async def _get_info(self, name):
+        url = 'https://zhuanlan.zhihu.com/api/columns/' + name
+        return await self._get_url(url)
+
+    async def _get_articles(self, url):
+        res = await base.fetch_zhihu(url)
+        res = json.loads(res.body.decode('utf-8'))
+        data = res.get('data')
+        paging = res.get('paging')
+        yield data
+        if not paging.get('is_end'):
+            yield await self._get_articles(paging.get('next'))
+
+    async def _get_library(self, author):
+        parameters = '?offset=0&limit=20&sort_by=created&include=data%5B*%5D.content'
+        url = 'https://www.zhihu.com/api/v4/members/{}/articles{}'.format(
+            author, parameters)
+        return await self._get_articles(url)
 
     async def _process_posts(self, posts):
         data = []
