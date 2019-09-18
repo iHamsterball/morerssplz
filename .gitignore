@@ -1,1 +1,16 @@
 morerss/proxy.py
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# JetBrains
+.idea
+
+# VS/VSCode
+.vs
+.vscode
