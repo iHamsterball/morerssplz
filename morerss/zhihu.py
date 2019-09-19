@@ -5,6 +5,7 @@ import asyncio
 import datetime
 import json
 import re
+import html
 import html.parser
 import itertools
 from functools import partial
@@ -31,20 +32,21 @@ def abs_img(m):
 class ZhihuZhuanlanHandler(BaseHandler):
     async def get(self, name):
         self.key = 'rss:zhihuzhuanlan:{}'.format(name)
-        xml = await self._update(name)
-        # if self.redis.exists(self.key):
-        #     parser = html.parser.HTMLParser()
-        #     xml = self.redis.get(self.key)
-        #     xml = parser.unescape(xml)
-        # else:
-        #     rss = PyRSS2Gen.RSS2(
-        #         title='',
-        #         link='',
-        #         lastBuildDate=datetime.datetime.now(),
-        #         generator='morerssplz %s' % (base.__version__),
-        #         description='',
-        #     )
-        #     xml = rss.to_xml(encoding='utf-8')
+        loop = asyncio.get_event_loop()
+        loop.create_task(self._update(name))
+        if self.redis.exists(self.key):
+            parser = html.parser.HTMLParser()
+            xml = self.redis.get(self.key)
+            xml = parser.unescape(xml)
+        else:
+            rss = PyRSS2Gen.RSS2(
+                title='',
+                link='',
+                lastBuildDate=datetime.datetime.now(),
+                generator='morerssplz %s' % (base.__version__),
+                description='',
+            )
+            xml = rss.to_xml(encoding='utf-8')
         self.finish(xml)
 
     async def _update(self, name):
@@ -58,24 +60,19 @@ class ZhihuZhuanlanHandler(BaseHandler):
         }
 
         baseurl = 'https://zhuanlan.zhihu.com/' + name
-        url = 'https://zhuanlan.zhihu.com/api/columns/%s/articles?limit=100' % name
+        url = 'https://zhuanlan.zhihu.com/api/columns/%s/articles' % name
 
-        articles = dict()
-        library = dict()
-        async for articles in self._get_articles(url):
-            for article in articles:
-                articles[article.get('id')] = None
-                author = article.get('author').get('url_token')
-                if author not in library:
-                    async for library in self._get_library(author):
-                        for item in library:
-                            library[item.get('id')] = item
-
-        print(library)
-        for id in articles:
-            articles[id] = library[id]
-
-        posts = articles.values()
+        authors = set()
+        coroutines = list()
+        articles = await self._get_articles(url, offset=0, limit=100)
+        for article in articles:
+            author = article.get('author').get('url_token')
+            if author not in authors:
+                authors.add(author)
+                coroutines.append(await self._get_library(author))
+        library = await asyncio.gather(*coroutines)
+        library = dict((article.get('id'), article) for article in library[0])
+        posts = list(library.get(article.get('id')) for article in articles)
 
         rss = base.data2rss(
             baseurl,
@@ -83,11 +80,10 @@ class ZhihuZhuanlanHandler(BaseHandler):
             partial(post2rss, url, digest=digest, pic=pic),
         )
         xml = rss.to_xml(encoding='utf-8')
-        # self.redis.set(self.key, xml)
-        return xml
+        self.redis.set(self.key, xml)
 
     async def _get_url(self, url):
-        res = await base.fetch_zhihu(url)
+        res = await base.fetch_zhihu(url, self.request.remote_ip)
         info = json.loads(res.body.decode('utf-8'))
         return info
 
@@ -95,25 +91,36 @@ class ZhihuZhuanlanHandler(BaseHandler):
         url = 'https://zhuanlan.zhihu.com/api/columns/' + name
         return await self._get_url(url)
 
-    async def _get_articles(self, url):
-        res = await base.fetch_zhihu(url)
+    async def _get_articles(self, url, offset, limit):
+        res = await base.fetch_zhihu('{}{}{}{}'.format(
+            url,
+            '&' if '?' in url else '?',
+            'offset={}'.format(offset),
+            '&limit={}'.format(limit)), self.request.remote_ip)
         res = json.loads(res.body.decode('utf-8'))
         data = res.get('data')
         paging = res.get('paging')
-        yield data
-        if not paging.get('is_end'):
-            yield await self._get_articles(paging.get('next'))
+        if not paging.get('is_end') and offset == 0:
+            totals = paging.get('totals')
+            coroutines = list()
+            while offset < totals:
+                offset += limit
+                coroutines.append(self._get_articles(url, offset, limit))
+            rest = await asyncio.gather(*coroutines)
+            for result in rest:
+                data.extend(result)
+        return data
 
     async def _get_library(self, author):
-        parameters = '?offset=0&limit=20&sort_by=created&include=data%5B*%5D.content'
+        parameters = '?sort_by=created&include=data%5B*%5D.content'
         url = 'https://www.zhihu.com/api/v4/members/{}/articles{}'.format(
             author, parameters)
-        return await self._get_articles(url)
+        return self._get_articles(url, offset=0, limit=20)
 
     async def _process_posts(self, posts):
         data = []
         for item in posts['data']:
-            res = await base.fetch_zhihu(item['url'])
+            res = await base.fetch_zhihu(item['url'], self.request.remote_ip)
             await asyncio.sleep(randint(1, 5))
             soup = BeautifulSoup(res.body.decode('utf-8'), features='lxml')
             item['content'] = str(
@@ -167,7 +174,7 @@ def post2rss(baseurl, post, *, digest=False, pic=None):
         title=post['title'].replace('\x08', ''),
         link=url,
         guid=PyRSS2Gen.Guid(url),
-        description=cdata(content),
+        description=content,
         pubDate=datetime.datetime.utcfromtimestamp(post['updated']),
         author=post['author']['name'],
     )
