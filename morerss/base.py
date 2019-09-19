@@ -180,12 +180,11 @@ class ZhihuManager:
             pass  # already removed by another request
         return res
 
-    async def fetch_zhihu(self, url, remote_ip, **kwargs):
+    async def fetch_zhihu(self, url, **kwargs):
         kwargs.setdefault('follow_redirects', False)
         kwargs.setdefault('raise_error', False)
         kwargs.setdefault(
             'user_agent', 'Mozilla/5.0 (X11; Linux x86_64; rv:63.0) Gecko/20100101 Firefox/63.0')
-        kwargs.setdefault('headers', dict([('X-Forwarded-For', remote_ip)]))
         kwargs.pop('raise_error', None)
 
         res = await self._do_fetch(url, kwargs)

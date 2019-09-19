@@ -83,7 +83,7 @@ class ZhihuZhuanlanHandler(BaseHandler):
         self.redis.set(self.key, xml)
 
     async def _get_url(self, url):
-        res = await base.fetch_zhihu(url, self.request.remote_ip)
+        res = await base.fetch_zhihu(url)
         info = json.loads(res.body.decode('utf-8'))
         return info
 
@@ -96,7 +96,7 @@ class ZhihuZhuanlanHandler(BaseHandler):
             url,
             '&' if '?' in url else '?',
             'offset={}'.format(offset),
-            '&limit={}'.format(limit)), self.request.remote_ip)
+            '&limit={}'.format(limit)))
         res = json.loads(res.body.decode('utf-8'))
         data = res.get('data')
         paging = res.get('paging')
@@ -120,7 +120,7 @@ class ZhihuZhuanlanHandler(BaseHandler):
     async def _process_posts(self, posts):
         data = []
         for item in posts['data']:
-            res = await base.fetch_zhihu(item['url'], self.request.remote_ip)
+            res = await base.fetch_zhihu(item['url'])
             await asyncio.sleep(randint(1, 5))
             soup = BeautifulSoup(res.body.decode('utf-8'), features='lxml')
             item['content'] = str(
